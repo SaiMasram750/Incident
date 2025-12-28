@@ -5,12 +5,21 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/incident': 'http://localhost:3000',
-      '/incidents': 'http://localhost:3000',
+      '/incident': {
+        target: 'http://localhost:3000',
+        changeOrigin: true
+      },
+      '/incidents': {
+        target: 'http://localhost:3000',
+        changeOrigin: true
+      },
       '/socket.io': {
         target: 'http://localhost:3000',
         ws: true
       }
     }
+  },
+  define: {
+    'process.env': process.env
   }
 })

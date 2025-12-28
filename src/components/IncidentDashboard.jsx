@@ -9,6 +9,7 @@ import {
   canReportIncident,
   canUpdateIncident
 } from '../utils/storageUtils';
+import { API_URL, getApiUrl, API_ENDPOINTS } from '../config/apiConfig';
 import StatisticsDashboard from './StatisticsDashboard';
 import './IncidentDashboard.css';
 
@@ -25,7 +26,12 @@ const IncidentDashboard = ({ currentUser, onLogout }) => {
 
   // Initialize Socket.IO and fetch incidents on mount
   useEffect(() => {
-    const initSocket = io();
+    const initSocket = io(API_URL, {
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: 5
+    });
     setSocket(initSocket);
 
     // Listen for new incidents
@@ -62,7 +68,12 @@ const IncidentDashboard = ({ currentUser, onLogout }) => {
   const loadIncidents = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/incidents');
+      const response = await fetch(getApiUrl(API_ENDPOINTS.INCIDENTS));
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch incidents: ${response.statusText}`);
+      }
+
       const backendIncidents = await response.json();
 
       // Merge backend incidents with localStorage
@@ -73,7 +84,7 @@ const IncidentDashboard = ({ currentUser, onLogout }) => {
       // Fall back to localStorage
       const cached = getIncidents();
       setIncidents(cached);
-      showMessage('Using cached data', 'info');
+      showMessage('Using cached data (backend unavailable)', 'info');
     } finally {
       setLoading(false);
     }
@@ -118,15 +129,17 @@ const IncidentDashboard = ({ currentUser, onLogout }) => {
     }
 
     try {
-      const response = await fetch('/incident', {
+      const response = await fetch(getApiUrl(API_ENDPOINTS.CREATE_INCIDENT), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       });
 
       if (response.ok) {
+        const data = await response.json();
         setFormData({ type: '', description: '', location: '' });
         showMessage('Incident reported successfully', 'success');
+        // Socket.IO will broadcast the new incident
       } else {
         const data = await response.json();
         showMessage(data.message || 'Failed to create incident', 'error');
@@ -139,7 +152,7 @@ const IncidentDashboard = ({ currentUser, onLogout }) => {
   // Update incident status
   const updateIncidentStatus = async (id, status) => {
     try {
-      const response = await fetch(`/incident/${id}`, {
+      const response = await fetch(getApiUrl(API_ENDPOINTS.UPDATE_INCIDENT(id)), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status })
@@ -150,6 +163,7 @@ const IncidentDashboard = ({ currentUser, onLogout }) => {
       } else {
         // Update in localStorage
         updateIncident(id, { status });
+        // Socket.IO will broadcast the update
       }
     } catch (error) {
       showMessage('Error: ' + error.message, 'error');
@@ -159,7 +173,7 @@ const IncidentDashboard = ({ currentUser, onLogout }) => {
   // Verify incident
   const verifyIncident = async (id) => {
     try {
-      const response = await fetch(`/incident/${id}`, {
+      const response = await fetch(getApiUrl(API_ENDPOINTS.UPDATE_INCIDENT(id)), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ verified: true })
@@ -170,6 +184,7 @@ const IncidentDashboard = ({ currentUser, onLogout }) => {
       } else {
         // Update in localStorage
         updateIncident(id, { verified: true });
+        // Socket.IO will broadcast the update
       }
     } catch (error) {
       showMessage('Error: ' + error.message, 'error');
